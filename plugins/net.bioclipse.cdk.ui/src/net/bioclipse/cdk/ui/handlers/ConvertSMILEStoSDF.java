@@ -19,6 +19,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.log4j.Logger;
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
@@ -33,10 +34,14 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.ui.handlers.HandlerUtil;
+import org.openscience.cdk.aromaticity.CDKHueckelAromaticityDetector;
 import org.openscience.cdk.exception.CDKException;
+import org.openscience.cdk.exception.InvalidSmilesException;
 import org.openscience.cdk.interfaces.IAtom;
 import org.openscience.cdk.interfaces.IMolecule;
 import org.openscience.cdk.smiles.DeduceBondSystemTool;
+import org.openscience.cdk.tools.CDKHydrogenAdder;
+import org.openscience.cdk.tools.manipulator.AtomContainerManipulator;
 
 import net.bioclipse.cdk.business.Activator;
 import net.bioclipse.cdk.business.ICDKManager;
@@ -60,7 +65,7 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 		Logger.getLogger(ConvertSMILEStoSDF.class);
 
 	//Possible separators
-	private static final String[] POSSIBLE_SEPARATORS=new String[]{",","\t"," "};
+	private static final String[] POSSIBLE_SEPARATORS=new String[]{",","\t"," ",";"};
 
 	
 	@Override
@@ -159,6 +164,7 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 		ICDKManager cdk = Activator.getDefault().getJavaCDKManager();
 		List<ICDKMolecule> molecules=new ArrayList<ICDKMolecule>();
 		DeduceBondSystemTool bondSystemTool= new DeduceBondSystemTool();
+		List<String> errors = new ArrayList<String>();
 
 		try {
 
@@ -213,14 +219,39 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 				String smiles=parts[0];
 
 				//Create a new CDKMolecule from smiles
-				ICDKMolecule mol = cdk.fromSMILES(smiles);
+				ICDKMolecule mol = null;
+				try {
+				
+					mol = cdk.fromSMILES(smiles.trim());
+
+				} catch (BioclipseException e) {
+					logger.error("Skipping SMILES due to invalid: " + smiles);
+					errors.add("Line " + lineno + ": SMILES invalid - " + smiles);
+					
+					//Read next line
+					line=br.readLine();
+					lineno++;
+					
+					continue;
+				}
 				
 				try {
 					IMolecule newAC = bondSystemTool.fixAromaticBondOrders((IMolecule)mol.getAtomContainer());
+
+					//Is this needed? TODO: VERIFY!
+//					CDKHueckelAromaticityDetector.detectAromaticity(newAC);
+//					AtomContainerManipulator.percieveAtomTypesAndConfigureAtoms(newAC);
+//
+//					CDKHydrogenAdder hAdder = CDKHydrogenAdder.getInstance(newAC.getBuilder());
+//					hAdder.addImplicitHydrogens(newAC);
+
 					mol=new CDKMolecule(newAC);
 				} catch (CDKException e) {
 					logger.error("Could not deduce bond orders for mol: " + mol);
+					errors.add("Line " + lineno + ": Could not deduce bond orders for SMILES " + smiles);
 				}
+				
+
 
 				//Store rest of parts as properties on mol
 				for (int i=1; i<headers.length;i++){
@@ -246,7 +277,7 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 				lineno++;
 				
 				monitor.worked(1);
-				if (lineno%100==0){
+				if (lineno%20==0){
 					if (monitor.isCanceled())
 			            throw new InterruptedException("Operation cancelled");
 					monitor.subTask("Processed: " + lineno + "/" + noLines);
@@ -267,6 +298,10 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 		
 
 		logger.debug("Read " + molecules.size() +" molecules.");
+		logger.debug("Errors found in " + errors.size() +" molecules.");
+		for (String er : errors)
+			logger.debug(er);
+		
 		return molecules;
 		
 	}
