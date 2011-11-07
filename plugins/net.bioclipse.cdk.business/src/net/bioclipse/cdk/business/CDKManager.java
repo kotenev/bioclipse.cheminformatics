@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -50,7 +49,6 @@ import net.bioclipse.core.business.BioclipseException;
 import net.bioclipse.core.domain.IMolecule;
 import net.bioclipse.core.domain.IMolecule.Property;
 import net.bioclipse.core.domain.RecordableList;
-import net.bioclipse.core.domain.SMILESMolecule;
 import net.bioclipse.core.util.LogUtils;
 import net.bioclipse.jobs.IReturner;
 import net.bioclipse.managers.business.IBioclipseManager;
@@ -59,6 +57,7 @@ import nu.xom.Element;
 import org.apache.log4j.Logger;
 import org.eclipse.core.filesystem.EFS;
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspaceRunnable;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -104,6 +103,7 @@ import org.openscience.cdk.interfaces.IMolecularFormula;
 import org.openscience.cdk.interfaces.IMoleculeSet;
 import org.openscience.cdk.io.CMLWriter;
 import org.openscience.cdk.io.FormatFactory;
+import org.openscience.cdk.io.IChemObjectReaderErrorHandler;
 import org.openscience.cdk.io.IChemObjectWriter;
 import org.openscience.cdk.io.ISimpleChemObjectReader;
 import org.openscience.cdk.io.MDLV2000Writer;
@@ -210,12 +210,64 @@ public class CDKManager implements IBioclipseManager {
     	return set;
     }
 
+    class MarkerErrorHandler implements IChemObjectReaderErrorHandler {
+    	
+    	private IFile file;
+    	
+		public MarkerErrorHandler(IFile file) {
+			this.file = file;
+		}
+
+		@Override
+		public void handleError(String message, int row, int colStart,
+				int colEnd, Exception exception) {
+			createMarker(message, row, colStart, colEnd);
+		}
+		
+		@Override
+		public void handleError(String message, int row, int colStart,
+				int colEnd) {
+			createMarker(message, row, colStart, colEnd);
+		}
+		
+		@Override
+		public void handleError(String message, Exception exception) {
+			createMarker(message, null, null, null);
+		}
+		
+		@Override
+		public void handleError(String message) {
+			createMarker(message, null, null, null);
+		}
+		
+		private void createMarker(String message, Integer row,
+				Integer colStart, Integer colEnd) {
+			try {
+				IMarker m = this.file.createMarker(IMarker.PROBLEM);
+				if (row != null)
+					m.setAttribute(IMarker.LINE_NUMBER, row);
+				m.setAttribute(IMarker.MESSAGE, message);
+				m.setAttribute(IMarker.PRIORITY, IMarker.PRIORITY_HIGH);
+				m.setAttribute(IMarker.SEVERITY, IMarker.SEVERITY_ERROR);
+				if (colStart != null)
+					m.setAttribute(IMarker.CHAR_START, colStart);
+				if (colEnd != null)
+					m.setAttribute(IMarker.CHAR_END, colEnd);
+			} catch (CoreException exception) {
+				logger.error("Failed to create a marker", exception);
+			}
+		}
+	};
+
     public ICDKMolecule loadMolecule(IFile file, IProgressMonitor monitor)
                         throws IOException, BioclipseException, CoreException {
 
+    	IChemObjectReaderErrorHandler handler =
+    		new MarkerErrorHandler(file);
         IChemFormat format = determineIChemFormat(file);
+        file.deleteMarkers(null, true, 10);
         ICDKMolecule loadedMol = loadMolecule( file.getContents(),
-                                               format,
+                                               format, handler,
                                                monitor
         );
         loadedMol.setResource(file);
@@ -225,6 +277,7 @@ public class CDKManager implements IBioclipseManager {
 
     public ICDKMolecule loadMolecule( InputStream instream,
                                       IChemFormat format,
+                                      IChemObjectReaderErrorHandler handler,
                                       IProgressMonitor monitor )
                         throws BioclipseException, IOException {
 
@@ -234,6 +287,7 @@ public class CDKManager implements IBioclipseManager {
 
         // Create the reader
         ISimpleChemObjectReader reader = readerFactory.createReader(format);
+        if (handler != null) reader.setErrorHandler(handler);
         if (reader == null) {
             throw new BioclipseException("Could not create reader in CDK.");
         }
@@ -1001,7 +1055,7 @@ public class CDKManager implements IBioclipseManager {
               = new ByteArrayInputStream( molstring.getBytes() );
 
           return loadMolecule( (InputStream)bais,
-                               (IChemFormat)CMLFormat.getInstance(),
+                               (IChemFormat)CMLFormat.getInstance(), null,
                                new NullProgressMonitor() );
       }
 
@@ -1021,7 +1075,7 @@ public class CDKManager implements IBioclipseManager {
         System.out.println("Format: " + format);
         return loadMolecule(
             new ByteArrayInputStream(molstring.getBytes()),
-            format,
+            format, null,
             new NullProgressMonitor()
         );
     }
