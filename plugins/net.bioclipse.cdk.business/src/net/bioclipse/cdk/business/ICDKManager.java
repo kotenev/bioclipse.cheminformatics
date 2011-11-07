@@ -901,6 +901,13 @@ public interface ICDKManager extends IBioclipseManager {
                            throws BioclipseException, InvocationTargetException;
 
     @Recorded
+    @TestMethods("testExtractFromSDFile_IFile_int_int")
+    public List<ICDKMolecule> extractFromSDFile( IFile file,
+                                                 int startentry,
+                                                 int endentry,
+                                                 IProgressMonitor monitor)
+                           throws BioclipseException, InvocationTargetException;
+    @Recorded
     @PublishedMethod(
         params = "String file, int startentry, int endentry",
         methodSummary = "Extracts a number of entries from an sd file. " +
@@ -1176,7 +1183,8 @@ public interface ICDKManager extends IBioclipseManager {
     @PublishedMethod(
          params="List<IMolecule> mols, double firstRatio",
          methodSummary="Split a list of molecules in 2 parts by a ratio.")
-    public List<List<IMolecule>> randomSplit2parts(List<IMolecule> mols_in, double firstRatio);    
+    public List<List<IMolecule>> randomSplit2parts(List<IMolecule> mols_in, double firstRatio);
 
-    
+    public List<ICDKMolecule> loadSMILESFile( IFile file,
+                                              IProgressMonitor monitor );    
 }

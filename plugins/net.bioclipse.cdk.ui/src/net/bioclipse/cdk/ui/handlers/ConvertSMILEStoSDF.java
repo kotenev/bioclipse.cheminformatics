@@ -19,7 +19,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang.StringEscapeUtils;
+import net.bioclipse.cdk.business.Activator;
+import net.bioclipse.cdk.business.ICDKManager;
+import net.bioclipse.cdk.domain.CDKMolecule;
+import net.bioclipse.cdk.domain.ICDKMolecule;
+import net.bioclipse.core.business.BioclipseException;
+import net.bioclipse.core.util.LogUtils;
+
 import org.apache.log4j.Logger;
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
@@ -34,21 +40,10 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.ui.handlers.HandlerUtil;
-import org.openscience.cdk.aromaticity.CDKHueckelAromaticityDetector;
 import org.openscience.cdk.exception.CDKException;
-import org.openscience.cdk.exception.InvalidSmilesException;
 import org.openscience.cdk.interfaces.IAtom;
 import org.openscience.cdk.interfaces.IMolecule;
 import org.openscience.cdk.smiles.DeduceBondSystemTool;
-import org.openscience.cdk.tools.CDKHydrogenAdder;
-import org.openscience.cdk.tools.manipulator.AtomContainerManipulator;
-
-import net.bioclipse.cdk.business.Activator;
-import net.bioclipse.cdk.business.ICDKManager;
-import net.bioclipse.cdk.domain.CDKMolecule;
-import net.bioclipse.cdk.domain.ICDKMolecule;
-import net.bioclipse.core.business.BioclipseException;
-import net.bioclipse.core.util.LogUtils;
 
 /**
  * A handler that can convert SMILES files into SDFiles.
@@ -92,13 +87,14 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 			protected IStatus run(IProgressMonitor monitor) {
 				List<ICDKMolecule> mols;
 				monitor.beginTask("Converting SMILES", 10);
+				ICDKManager cdk = Activator.getDefault().getJavaCDKManager();
 				try {
-					mols = ConvertSMILEStoSDF.readFileIntoMoleculeList(
-							file, new SubProgressMonitor(monitor, 9));
-				} catch (InterruptedException e) {
-					monitor.done();
-					logger.debug("Canceled.");
-					return Status.CANCEL_STATUS;
+					mols = cdk.loadSMILESFile( 
+					           file, 
+					           new SubProgressMonitor(monitor, 9) );
+					if ( monitor.isCanceled()) {
+					    return Status.CANCEL_STATUS;
+					}
 				} catch (Exception e) {
 					LogUtils.handleException(e, logger, 
 							net.bioclipse.cdk.ui.Activator.PLUGIN_ID);
@@ -119,7 +115,7 @@ public class ConvertSMILEStoSDF extends AbstractHandler{
 									.replace(".smi", ".sdf");
 				
 				
-				ICDKManager cdk = Activator.getDefault().getJavaCDKManager();
+				
 //				debugAromaticity(mols.get(0));
 
 				try {
