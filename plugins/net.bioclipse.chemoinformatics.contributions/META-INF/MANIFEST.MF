@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Bioclipse chemoinformatiocs UI contributions
+Bundle-SymbolicName: net.bioclipse.chemoinformatics.contributions
+Bundle-Version: 2.5.0.qualifier
+Fragment-Host: net.bioclipse.chemoinformatics;bundle-version="2.5.0"
+Bundle-RequiredExecutionEnvironment: JavaSE-1.6
